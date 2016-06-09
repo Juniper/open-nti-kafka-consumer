@@ -1,3 +1,3 @@
 #! /bin/bash
 
-docker build -t juniper/open-nti-kafka-consumer .
+docker build --no-cache -t juniper/open-nti-kafka-consumer:fluentd . 

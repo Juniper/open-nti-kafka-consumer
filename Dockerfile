@@ -1,48 +1,57 @@
-FROM telegraf:0.13.0
+FROM fluent/fluentd:v0.12.24
 MAINTAINER Damien Garros <dgarros@gmail.com>
 
-RUN     apt-get -y update && \
-        apt-get -y install \
-              python-dev \
-              python-pip
+ENV FLUENTD_JUNIPER_VERSION 0.2.11
 
-        #       && \
-        # apt-get clean && \
-        # rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+USER root
+WORKDIR /home/fluent
 
-RUN     pip install envtpl
+## Install python
+RUN apk update \
+    && apk add python-dev py-pip \
+    && pip install --upgrade pip \
+    && pip install envtpl \
+    && apk del -r --purge gcc make g++ \
+    && rm -rf /var/cache/apk/*
 
+ENV PATH /home/fluent/.gem/ruby/2.2.0/bin:$PATH
 
-########################
-### Install telegraf ###
-########################
+RUN apk --no-cache --update add \
+                            build-base \
+                            ruby-dev && \
+    echo 'gem: --no-document' >> /etc/gemrc && \
+    gem install --no-ri --no-rdoc \
+              influxdb \
+              ruby-kafka yajl ltsv zookeeper \
+              bigdecimal && \
+    apk del build-base ruby-dev && \
+    rm -rf /tmp/* /var/tmp/* /var/cache/apk/*
 
-RUN     mkdir /root/telegraf
+# Copy Start script to generate configuration dynamically
+ADD     fluentd-alpine.start.sh         fluentd-alpine.start.sh
+RUN     chown -R fluent:fluent fluentd-alpine.start.sh
+RUN     chmod 777 fluentd-alpine.start.sh
 
-# RUN     mkdir /etc/service/telegraf
-# ADD     telegraf/telegraf.launcher.sh /etc/service/telegraf/run
-# RUN     chmod +x /etc/service/telegraf/run
+USER fluent
 
-ADD     telegraf.start.sh /root/telegraf.start.sh
-RUN     chmod +x /root/telegraf.start.sh
+RUN     gem install fluent-plugin-kafka
+EXPOSE 24284
 
-ADD     telegraf.conf.tpl /root/telegraf/telegraf.conf.tpl
+ENV OUTPUT_INFLUXDB=true \
+    OUTPUT_STDOUT=false \
 
-# etc/telegraf/telegraf.conf
-
-WORKDIR /root
-ENV HOME /root
-
-RUN chmod -R 777 /var/log/
-
-ENV INFLUXDB_ADDR=localhost \
+    INFLUXDB_ADDR=localhost \
+    INFLUXDB_PORT=8086 \
     INFLUXDB_DB=juniper \
     INFLUXDB_USER=juniper \
     INFLUXDB_PWD=juniper \
-    INFLUXDB_PORT=8086 \
-    ZOOKEEPER_ADDR=localhost \
-    ZOOKEEPER_PORT=2181 \
+    INFLUXDB_FLUSH_INTERVAL=2 \
+    INFLUXDB_VALUE_KEY=value \
+    KAFKA_ADDR=localhost \
+    KAFKA_PORT=9092 \
+    KAFKA_DATA_TYPE=json \
+    KAFKA_CONSUMER_GRP=openntisyslog \
     KAFKA_TOPIC=jnpr.jvision \
-    KAFKA_DATA_TYPE=json
+    FLUENTD_TAG=jnpr
 
-CMD ["/root/telegraf.start.sh"]
+CMD /home/fluent/fluentd-alpine.start.sh
