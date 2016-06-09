@@ -1,22 +1,8 @@
-FROM phusion/baseimage:0.9.18
+FROM telegraf:0.13.0
 MAINTAINER Damien Garros <dgarros@gmail.com>
 
 RUN     apt-get -y update && \
-        apt-get -y upgrade && \
-        apt-get clean   && \
-        rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# dependencies
-RUN     apt-get -y update && \
         apt-get -y install \
-              git \
-              adduser \
-              libfontconfig \
-              wget \
-              make \
-              curl \
-              build-essential \
-              tcpdump \
               python-dev \
               python-pip
 
@@ -26,29 +12,23 @@ RUN     apt-get -y update && \
 
 RUN     pip install envtpl
 
-# Latest version
-ENV TELEGRAF_VERSION 0.11.1-1
 
 ########################
 ### Install telegraf ###
 ########################
 
-RUN     curl -s -o /tmp/telegraf_latest_amd64.deb http://get.influxdb.org/telegraf/telegraf_${TELEGRAF_VERSION}_amd64.deb && \
-        dpkg -i /tmp/telegraf_latest_amd64.deb && \
-        rm /tmp/telegraf_latest_amd64.deb
-
 RUN     mkdir /root/telegraf
 
-RUN     mkdir /etc/service/telegraf
-ADD     telegraf/telegraf.launcher.sh /etc/service/telegraf/run
-RUN     chmod +x /etc/service/telegraf/run
+# RUN     mkdir /etc/service/telegraf
+# ADD     telegraf/telegraf.launcher.sh /etc/service/telegraf/run
+# RUN     chmod +x /etc/service/telegraf/run
 
-ADD     telegraf/telegraf.start.sh /root/telegraf.start.sh
+ADD     telegraf.start.sh /root/telegraf.start.sh
 RUN     chmod +x /root/telegraf.start.sh
 
-########################
-### Configuration    ###
-########################
+ADD     telegraf.conf.tpl /root/telegraf/telegraf.conf.tpl
+
+# etc/telegraf/telegraf.conf
 
 WORKDIR /root
 ENV HOME /root
@@ -65,4 +45,4 @@ ENV INFLUXDB_ADDR=localhost \
     KAFKA_TOPIC=jnpr.jvision \
     KAFKA_DATA_TYPE=json
 
-CMD ["/sbin/my_init"]
+CMD ["/root/telegraf.start.sh"]
